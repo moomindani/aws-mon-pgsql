@@ -117,6 +117,11 @@ Name                       | Description
 --aws-credential-file PATH | Provides the location of the file containing AWS credentials. This parameter cannot be used with the --aws-access-key-id and --aws-secret-key parameters.
 --aws-access-key-id VALUE  | Specifies the AWS access key ID to use to identify the caller. Must be used together with the --aws-secret-key option. Do not use this option with the --aws-credential-file parameter.
 --aws-secret-key VALUE     | Specifies the AWS secret access key to use to sign the request to CloudWatch. Must be used together with the --aws-access-key-id option. Do not use this option with --aws-credential-file parameter.
+--id	                     | Specifies database instance identifier.
+-h	                       | Specifies database server host.
+-p	                       | Specifies database server port.
+-U	                       | Specifies database user.
+-d	                       | Specifies database name.
 --status-check-failed      | Reports whether the database instance has passed the status check.
 --status-check-timeout     | Specifies status check timeout. (default: 10s)
 --cache-hit	               | Reports cache hit ratio.
@@ -148,7 +153,7 @@ The following examples assume that you have already updated the awscreds.conf fi
 * Run the following command:
 
 ```
-./aws-mon-pgsql.sh -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --status-check-failed --verify --verbose
+./aws-mon-pgsql.sh --id postgres -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --status-check-failed --verify --verbose
 ```
 
 #### To collect the status and send them to CloudWatch
@@ -156,7 +161,7 @@ The following examples assume that you have already updated the awscreds.conf fi
 * Run the following command:
 
 ```
-./aws-mon-pgsql.sh -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --status-check-failed  --verbose
+./aws-mon-pgsql.sh --id postgres -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --status-check-failed  --verbose
 ```
 
 #### To collect all available session metrics and send them to CloudWatch
@@ -164,7 +169,7 @@ The following examples assume that you have already updated the awscreds.conf fi
 * Run the following command:
 
 ```
-./aws-mon-pgsql.sh -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --session-active --session-idle --session-wait --verbose
+./aws-mon-pgsql.sh --id postgres -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --session-active --session-idle --session-wait --verbose
 ```
 
 #### To collect the cache hit ratio and send them to CloudWatch
@@ -172,7 +177,7 @@ The following examples assume that you have already updated the awscreds.conf fi
 * Run the following command:
 
 ```
-./aws-mon-pgsql.sh -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --cache-hit --verbose
+./aws-mon-pgsql.sh --id postgres -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --cache-hit --verbose
 ```
 
 #### To collect all available tupple metrics and send them to CloudWatch
@@ -180,9 +185,9 @@ The following examples assume that you have already updated the awscreds.conf fi
 * Run the following command:
 
 ```
-./aws-mon-pgsql.sh -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --tup-inserted --tup-updated --tup-deleted --tup-returned --tup-fetched --verbose
+./aws-mon-pgsql.sh --id postgres -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --tup-inserted --tup-updated --tup-deleted --tup-returned --tup-fetched --verbose
 (wait a few seconds...)
-./aws-mon-pgsql.sh -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --tup-inserted --tup-updated --tup-deleted --tup-returned --tup-fetched --verbose
+./aws-mon-pgsql.sh --id postgres -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --tup-inserted --tup-updated --tup-deleted --tup-returned --tup-fetched --verbose
 ```
 
 #### To set a cron schedule for metrics reported to CloudWatch
@@ -196,5 +201,5 @@ crontab -e
 2. Add the following command to report all items to CloudWatch every five minutes:
 
 ```
-*/5 * * * *  ~/aws-mon-pgsql/aws-mon-pgsql.sh -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --aws-credential-file ~/awscreds --all-items --from-cron
+*/5 * * * *  ~/aws-mon-pgsql/aws-mon-pgsql.sh --id postgres -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --aws-credential-file ~/awscreds --all-items --from-cron
 ```
