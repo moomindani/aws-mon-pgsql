@@ -196,5 +196,5 @@ crontab -e
 2. Add the following command to report all items to CloudWatch every five minutes:
 
 ```
-*/5 * * * *  ~/aws-mon-pgsql/aws-mon-pgsql.sh --aws-credential-file ~/awscreds --all-items --from-cron
+*/5 * * * *  ~/aws-mon-pgsql/aws-mon-pgsql.sh -h postgres.xxx.ap-northeast-1.rds.amazonaws.com -p 5432 -U postgres -d postgres --aws-credential-file ~/awscreds --all-items --from-cron
 ```
