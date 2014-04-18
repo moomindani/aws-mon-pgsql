@@ -49,8 +49,8 @@ usage()
     echo -e "\t-p\tSpecifies database server port."
     echo -e "\t-U\tSpecifies database user."
     echo -e "\t-d\tSpecifies database name."
-    echo -e "\t--status\tReports the status."
-    echo -e "\t--timeut\tSpecifies status check timeout."
+    echo -e "\t--status-check-failed\tReports whether the database instance has passed the status check."
+    echo -e "\t--status-check-timeout\tSpecifies status check timeout."
     echo -e "\t--session-active\tReports the number of sessions whose status is active."
     echo -e "\t--session-idle\tReports the number of sessions whose status is idle."
     echo -e "\t--session-wait\tReports the number of sessions whose status is wait."
@@ -77,7 +77,7 @@ usage()
 # Options
 ########################################
 SHORT_OPTS="h:,p:,U:,d:"
-LONG_OPTS="help,version,verify,verbose,debug,from-cron,aws-credential-file:,aws-access-key-id:,aws-secret-key:,id:,status,timeout:,session-active,session-idle,session-wait,cache-hit,tup-inserted,tup-updated,tup-deleted,tup-returned,tup-fetched,buffers-checkpoint,buffers-clean,buffers-backend,blks-read,blks-hit,txn-commit,txn-rollback,locks-acquired,locks-wait,all-items"
+LONG_OPTS="help,version,verify,verbose,debug,from-cron,aws-credential-file:,aws-access-key-id:,aws-secret-key:,id:,status-check-failed,status-check-timeout:,session-active,session-idle,session-wait,cache-hit,tup-inserted,tup-updated,tup-deleted,tup-returned,tup-fetched,buffers-checkpoint,buffers-clean,buffers-backend,blks-read,blks-hit,txn-commit,txn-rollback,locks-acquired,locks-wait,all-items"
 
 ARGS=$(getopt -s bash --options $SHORT_OPTS --longoptions $LONG_OPTS --name $SCRIPT_NAME -- "$@" ) 
 
@@ -94,7 +94,8 @@ PGPORT=5432
 PGUSER="postgres"
 DBNAME="postgres"
 
-STATUS=0
+STATUS_CHECK_FAILED=0
+STATUS_CHECK_TIMEOUT=10
 SESSION_ACTIVE=0
 SESSION_IDLE=0
 SESSION_WAIT=0
@@ -176,10 +177,10 @@ while true; do
             DBNAME=$1
             ;;
         # Status
-        --status)
-            STATUS=1
+        --status-check-failed)
+            STATUS_CHECK_FAILED=1
             ;;
-        --timeout)
+        --status-check-timeout)
             shift
             STATUS_CHECK_TIMEOUT=$1
             ;;
@@ -246,7 +247,7 @@ while true; do
             ;;
         # All items
         --all-items)
-            STATUS=1
+            STATUS_CHECK_FAILED=1
             SESSION_ACTIVE=1
             SESSION_IDLE=1
             SESSION_WAIT=1
@@ -358,7 +359,7 @@ fi
 
 
 # Status
-if [ $STATUS -eq 1 ]; then
+if [ $STATUS_CHECK_FAILED -eq 1 ]; then
     query="SELECT 1 for UPDATE"
     env PGCONNECT_TIMEOUT=$STATUS_CHECK_TIMEOUT $PSQL_CMD "$query"
     pg_status=$?
