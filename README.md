@@ -92,11 +92,23 @@ ln -s /opt/aws/apitools/mon-1.0.20.0/bin/mon-put-data mon-put-data
 
 ## Getting Started
 
-Download "aws-mon-pgsql.sh" or clone repository using following steps: 
+Download "aws-mon-pgsql.sh" or clone repository: 
 
 ```
 git clone https://github.com/moomindani/aws-mon-pgsql.git
 cd aws-mon-pgsql
+```
+
+Make ".pgpass" in order to connect postgres without password:
+
+```
+echo "postgres.xxx.ap-northeast-1.rds.amazonaws.com:5432:postgres:postgres:password" > ~/.pgpass
+chmod 600 ~/.pgpass
+```
+
+Use the script:
+
+```
 ./aws-mon-pgsql.sh --help
 ```
 
