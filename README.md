@@ -40,10 +40,10 @@ This script requires [Amazon CloudWatch Command Line Tool](http://aws.amazon.com
 
 Instances that you launch using the Amazon Linux AMI already include the CLI tools.
 
-All you have to do is to install git.
+All you have to do is to install git and postgresql-client.
 
 ```
-yum install git
+yum install git postgresql
 ```
 
 
@@ -51,20 +51,18 @@ yum install git
 
 #### RHEL
 
-Install git.
+Install git and postgresql-client.
 
 ```
-yum install git
+yum install git postgresql
 ```
 
 #### Ubuntu
 
-Install git, unzip and jre.
+Install git, unzip, jre and postgresql-client.
 
 ```
-apt-get install git
-apt-get install unzip
-apt-get install default-jre
+apt-get install git unzip default-jre postgresql-client
 ```
 
 In order to set correct JAVA_HOME, you have to edit aws-mon.sh as follows:
