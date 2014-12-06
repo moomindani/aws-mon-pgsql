@@ -314,7 +314,7 @@ if [ $FROM_CRON -eq 1 ]; then
 fi
 
 # CloudWatch Command Line Interface Option
-CLOUDWATCH_OPTS="--namespace \"aws-mon-pgsql\" --dimensions \"DBInstanceIdentifier=$DB_INSTANCE_IDENTIFIER\""
+CLOUDWATCH_OPTS="--namespace aws-mon-pgsql --dimensions DBInstanceIdentifier=$DB_INSTANCE_IDENTIFIER"
 if [ -n "$PROFILE" ]; then
     CLOUDWATCH_OPTS="$CLOUDWATCH_OPTS --profile $PROFILE"
 fi
