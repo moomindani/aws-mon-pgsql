@@ -18,15 +18,7 @@
 # Initial Settings
 ########################################
 SCRIPT_NAME=${0##*/} 
-SCRIPT_VERSION=1.0 
-
-export AWS_CLOUDWATCH_HOME=/opt/aws/apitools/mon
-instanceid=`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`
-azone=`wget -q -O - http://169.254.169.254/latest/meta-data/placement/availability-zone`
-region=${azone/%?/}
-export EC2_REGION=$region
-
-
+SCRIPT_VERSION=1.1 
 
 ########################################
 # Usage
@@ -41,15 +33,13 @@ usage()
     echo -e "\t--verbose\tDisplays details of what the script is doing."
     echo -e "\t--debug\tDisplays information for debugging."
     echo -e "\t--from-cron\tUse this option when calling the script from cron."
-    echo -e "\t--aws-credential-file PATH\tProvides the location of the file containing AWS credentials. This parameter cannot be used with the --aws-access-key-id and --aws-secret-key parameters."
-    echo -e "\t--aws-access-key-id VALUE\tSpecifies the AWS access key ID to use to identify the caller. Must be used together with the --aws-secret-key option. Do not use this option with the --aws-credential-file parameter."
-    echo -e "\t--aws-secret-key VALUE\tSpecifies the AWS secret access key to use to sign the request to CloudWatch. Must be used together with the --aws-access-key-id option. Do not use this option with --aws-credential-file parameter."
+    echo -e "\t--profile VALUE\tUse a specific profile from your credential file."
     echo -e "\t--id\tSpecifies database instance identifier."
     echo -e "\t-h\tSpecifies database server host."
     echo -e "\t-p\tSpecifies database server port."
     echo -e "\t-U\tSpecifies database user."
     echo -e "\t-d\tSpecifies database name."
-    echo -e "\t--status-check-failed\tReports whether the database instance has passed the status check."
+    echo -e "\t--status-check\tReports the status of the database instance."
     echo -e "\t--status-check-timeout\tSpecifies status check timeout."
     echo -e "\t--session-active\tReports the number of sessions whose status is active."
     echo -e "\t--session-idle\tReports the number of sessions whose status is idle."
@@ -77,7 +67,7 @@ usage()
 # Options
 ########################################
 SHORT_OPTS="h:,p:,U:,d:"
-LONG_OPTS="help,version,verify,verbose,debug,from-cron,aws-credential-file:,aws-access-key-id:,aws-secret-key:,id:,status-check-failed,status-check-timeout:,session-active,session-idle,session-wait,cache-hit,tup-inserted,tup-updated,tup-deleted,tup-returned,tup-fetched,buffers-checkpoint,buffers-clean,buffers-backend,blks-read,blks-hit,txn-commit,txn-rollback,locks-acquired,locks-wait,all-items"
+LONG_OPTS="help,version,verify,verbose,debug,from-cron,profile:,id:,status-check,status-check-timeout:,session-active,session-idle,session-wait,cache-hit,tup-inserted,tup-updated,tup-deleted,tup-returned,tup-fetched,buffers-checkpoint,buffers-clean,buffers-backend,blks-read,blks-hit,txn-commit,txn-rollback,locks-acquired,locks-wait,all-items"
 
 ARGS=$(getopt -s bash --options $SHORT_OPTS --longoptions $LONG_OPTS --name $SCRIPT_NAME -- "$@" ) 
 
@@ -85,16 +75,14 @@ VERIFY=0
 VERBOSE=0
 DEBUG=0
 FROM_CRON=0
-AWS_CREDENTIAL_FILE=""
-AWS_ACCESS_KEY_ID=""
-AWS_SECRET_KEY=""
+PROFILE=""
 
 PGHOST="localhost"
 PGPORT=5432
 PGUSER="postgres"
 DBNAME="postgres"
 
-STATUS_CHECK_FAILED=0
+STATUS_CHECK=0
 STATUS_CHECK_TIMEOUT=10
 SESSION_ACTIVE=0
 SESSION_IDLE=0
@@ -141,18 +129,10 @@ while true; do
         --from-cron)
             FROM_CRON=1
             ;;
-        # Credential
-        --aws-credential-file)
+        # Profile
+        --profile)
             shift
-            AWS_CREDENTIAL_FILE=$1
-            ;;
-        --aws-access-key-id)
-            shift
-            AWS_ACCESS_KEY_ID=$1
-            ;;
-        --aws-secret-key)
-            shift
-            AWS_SECRET_KEY=$1
+            PROFILE=$1
             ;;
         # DB instance identifier
         --id)
@@ -177,8 +157,8 @@ while true; do
             DBNAME=$1
             ;;
         # Status
-        --status-check-failed)
-            STATUS_CHECK_FAILED=1
+        --status-check)
+            STATUS_CHECK=1
             ;;
         --status-check-timeout)
             shift
@@ -247,7 +227,7 @@ while true; do
             ;;
         # All items
         --all-items)
-            STATUS_CHECK_FAILED=1
+            STATUS_CHECK=1
             SESSION_ACTIVE=1
             SESSION_IDLE=1
             SESSION_WAIT=1
@@ -335,10 +315,12 @@ fi
 
 # CloudWatch Command Line Interface Option
 CLOUDWATCH_OPTS="--namespace \"aws-mon-pgsql\" --dimensions \"DBInstanceIdentifier=$DB_INSTANCE_IDENTIFIER\""
-if [ -n "$AWS_CREDENTIAL_FILE" ]; then
-    CLOUDWATCH_OPTS="$CLOUDWATCH_OPTS --aws-credential-file $AWS_CREDENTIAL_FILE"
-elif [ -n "$AWS_ACCESS_KEY_ID" -a -n "$AWS_SECRET_KEY" ]; then
-    CLOUDWATCH_OPTS="$CLOUDWATCH_OPTS --access-key-id $AWS_ACCESS_KEY_ID --secret-key $AWS_SECRET_KEY"
+if [ -n "$PROFILE" ]; then
+    CLOUDWATCH_OPTS="$CLOUDWATCH_OPTS --profile $PROFILE"
+fi
+
+if [ $DEBUG -eq 1 ]; then
+    CLOUDWATCH_OPTS="$CLOUDWATCH_OPTS --debug"
 fi
 
 # Updating time
@@ -359,7 +341,7 @@ fi
 
 
 # Status
-if [ $STATUS_CHECK_FAILED -eq 1 ]; then
+if [ $STATUS_CHECK -eq 1 ]; then
     query="SELECT 1 for UPDATE"
     env PGCONNECT_TIMEOUT=$STATUS_CHECK_TIMEOUT $PSQL_CMD "$query"
     pg_status=$?
@@ -367,7 +349,7 @@ if [ $STATUS_CHECK_FAILED -eq 1 ]; then
         echo "pg_status:$pg_status"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "PgStatus" --value "$pg_status" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "PgStatus" --value "$pg_status" --unit "Count" $CLOUDWATCH_OPTS
     fi
 
     if [ $pg_status -ne 0 ]; then
@@ -384,7 +366,7 @@ if [ $SESSION_ACTIVE -eq 1 ]; then
         echo "session_active:$session_active"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "SessionActive" --value "$session_active" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "SessionActive" --value "$session_active" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -395,7 +377,7 @@ if [ $SESSION_IDLE -eq 1 ]; then
         echo "session_idle:$session_idle"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "SessionIdle" --value "$session_idle" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "SessionIdle" --value "$session_idle" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -406,7 +388,7 @@ if [ $SESSION_WAIT -eq 1 ]; then
         echo "session_wait:$session_wait"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "SessionWait" --value "$session_wait" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "SessionWait" --value "$session_wait" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -418,7 +400,7 @@ if [ $CACHE_HIT -eq 1 ]; then
         echo "cache_hit:$cache_hit"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "CacheHit" --value "$cache_hit" --unit "Percent" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "CacheHit" --value "$cache_hit" --unit "Percent" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -437,7 +419,7 @@ if [ $TXN_COMMIT -eq 1 ]; then
         echo "txn_commit:$txn_commit"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "TxnCommit" --value "$txn_commit" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "TxnCommit" --value "$txn_commit" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -455,7 +437,7 @@ if [ $TXN_ROLLBACK -eq 1 ]; then
         echo "txn_rollback:$txn_rollback"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "TxnRollback" --value "$txn_rollback" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "TxnRollback" --value "$txn_rollback" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -474,7 +456,7 @@ if [ $TUP_RETURNED -eq 1 ]; then
         echo "tup_returned:$tup_returned"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "TupReturned" --value "$tup_returned" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "TupReturned" --value "$tup_returned" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -492,7 +474,7 @@ if [ $TUP_FETCHED -eq 1 ]; then
         echo "tup_fetched:$tup_fetched"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "TupFetched" --value "$tup_fetched" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "TupFetched" --value "$tup_fetched" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -510,7 +492,7 @@ if [ $TUP_INSERTED -eq 1 ]; then
         echo "tup_inserted:$tup_inserted"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "TupInserted" --value "$tup_inserted" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "TupInserted" --value "$tup_inserted" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -528,7 +510,7 @@ if [ $TUP_UPDATED -eq 1 ]; then
         echo "tup_updated:$tup_updated"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "TupUpdated" --value "$tup_updated" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "TupUpdated" --value "$tup_updated" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -546,7 +528,7 @@ if [ $TUP_DELETED -eq 1 ]; then
         echo "tup_deleted:$tup_deleted"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "TupDeleted" --value "$tup_deleted" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "TupDeleted" --value "$tup_deleted" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -558,7 +540,7 @@ if [ $LOCKS_ACQUIRED -eq 1 ]; then
         echo "locks_acquired:$locks_acquired"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "LocksAcquired" --value "$locks_acquired" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "LocksAcquired" --value "$locks_acquired" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -569,7 +551,7 @@ if [ $LOCKS_WAIT -eq 1 ]; then
         echo "locks_wait:$locks_wait"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "LocksWait" --value "$locks_wait" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "LocksWait" --value "$locks_wait" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -588,7 +570,7 @@ if [ $BLKS_READ -eq 1 ]; then
         echo "blks_read:$blks_read"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "BlksRead" --value "$blks_read" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "BlksRead" --value "$blks_read" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -606,7 +588,7 @@ if [ $BLKS_HIT -eq 1 ]; then
         echo "blks_hit:$blks_hit"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "BlksHit" --value "$blks_hit" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "BlksHit" --value "$blks_hit" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -625,7 +607,7 @@ if [ $BUFFERS_CHECKPOINT -eq 1 ]; then
         echo "buffers_checkpoint:$buffers_checkpoint"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "BuffersCheckpoint" --value "$buffers_checkpoint" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "BuffersCheckpoint" --value "$buffers_checkpoint" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -643,7 +625,7 @@ if [ $BUFFERS_CLEAN -eq 1 ]; then
         echo "buffers_clean:$buffers_clean"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "BuffersClean" --value "$buffers_clean" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "BuffersClean" --value "$buffers_clean" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
@@ -661,7 +643,7 @@ if [ $BUFFERS_BACKEND -eq 1 ]; then
         echo "buffers_backend:$buffers_backend"
     fi
     if [ $VERIFY -eq 0 ]; then
-        /opt/aws/bin/mon-put-data --metric-name "BuffersBackend" --value "$buffers_backend" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "BuffersBackend" --value "$buffers_backend" --unit "Count" $CLOUDWATCH_OPTS
     fi
 fi
 
