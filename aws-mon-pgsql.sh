@@ -39,8 +39,9 @@ usage()
     echo -e "\t-p\tSpecifies database server port."
     echo -e "\t-U\tSpecifies database user."
     echo -e "\t-d\tSpecifies database name."
-    echo -e "\t--status-check\tReports the status of the database instance."
-    echo -e "\t--status-check-timeout\tSpecifies status check timeout."
+    echo -e "\t--status\tReports the status of the database instance."
+    echo -e "\t--query-execution\tReports whether select query is executed successfully or not."
+    echo -e "\t--query-execution-timeout\tSpecifies timeout for query execution."
     echo -e "\t--session-active\tReports the number of sessions whose status is active."
     echo -e "\t--session-idle\tReports the number of sessions whose status is idle."
     echo -e "\t--session-wait\tReports the number of sessions whose status is wait."
@@ -67,7 +68,7 @@ usage()
 # Options
 ########################################
 SHORT_OPTS="h:,p:,U:,d:"
-LONG_OPTS="help,version,verify,verbose,debug,from-cron,profile:,id:,status-check,status-check-timeout:,session-active,session-idle,session-wait,cache-hit,tup-inserted,tup-updated,tup-deleted,tup-returned,tup-fetched,buffers-checkpoint,buffers-clean,buffers-backend,blks-read,blks-hit,txn-commit,txn-rollback,locks-acquired,locks-wait,all-items"
+LONG_OPTS="help,version,verify,verbose,debug,from-cron,profile:,id:,status,query-execution,query-execution-timeout:,session-active,session-idle,session-wait,cache-hit,tup-inserted,tup-updated,tup-deleted,tup-returned,tup-fetched,buffers-checkpoint,buffers-clean,buffers-backend,blks-read,blks-hit,txn-commit,txn-rollback,locks-acquired,locks-wait,all-items"
 
 ARGS=$(getopt -s bash --options $SHORT_OPTS --longoptions $LONG_OPTS --name $SCRIPT_NAME -- "$@" ) 
 
@@ -82,8 +83,9 @@ PGPORT=5432
 PGUSER="postgres"
 DBNAME="postgres"
 
-STATUS_CHECK=0
-STATUS_CHECK_TIMEOUT=10
+STATUS=0
+QUERY_EXECUTION=0
+QUERY_EXECUTION_TIMEOUT=10
 SESSION_ACTIVE=0
 SESSION_IDLE=0
 SESSION_WAIT=0
@@ -157,12 +159,15 @@ while true; do
             DBNAME=$1
             ;;
         # Status
-        --status-check)
-            STATUS_CHECK=1
+        --status)
+            STATUS=1
             ;;
-        --status-check-timeout)
+        --query-execution)
+            QUERY_EXECUTION=1
+            ;;
+        --query-execution-timeout)
             shift
-            STATUS_CHECK_TIMEOUT=$1
+            QUERY_EXECUTION_TIMEOUT=$1
             ;;
         # Session
         --session-active)
@@ -227,7 +232,8 @@ while true; do
             ;;
         # All items
         --all-items)
-            STATUS_CHECK=1
+            STATUS=1
+            QUERY_EXECUTION=1
             SESSION_ACTIVE=1
             SESSION_IDLE=1
             SESSION_WAIT=1
@@ -339,17 +345,31 @@ if [ $VERBOSE -eq 1 ]; then
     echo "time_interval:$time_interval"
 fi
 
-
 # Status
-if [ $STATUS_CHECK -eq 1 ]; then
-    query="SELECT 1 for UPDATE"
-    env PGCONNECT_TIMEOUT=$STATUS_CHECK_TIMEOUT $PSQL_CMD "$query"
-    pg_status=$?
+if [ $STATUS -eq 1 ]; then
+    DESCRIBE_OPTS="--db-instance-identifier $DB_INSTANCE_IDENTIFIER"
+    if [ $DEBUG -eq 1 ]; then
+        DESCRIBE_OPTS="$DESCRIBE_OPTS --debug"
+    fi
+    status=`aws rds describe-db-instances $DESCRIBE_OPTS | grep DBInstanceStatus | grep -v available | wc -l`
     if [ $VERBOSE -eq 1 ]; then
-        echo "pg_status:$pg_status"
+        echo "status:$status"
     fi
     if [ $VERIFY -eq 0 ]; then
-        aws cloudwatch put-metric-data --metric-name "PgStatus" --value "$pg_status" --unit "Count" $CLOUDWATCH_OPTS
+        aws cloudwatch put-metric-data --metric-name "Status" --value "$status" --unit "Count" $CLOUDWATCH_OPTS
+    fi
+fi
+
+# Query Execution
+if [ $QUERY_EXECUTION -eq 1 ]; then
+    query="SELECT 1 for UPDATE"
+    env PGCONNECT_TIMEOUT=$QUERY_EXECUTION_TIMEOUT $PSQL_CMD "$query"
+    pg_status=$?
+    if [ $VERBOSE -eq 1 ]; then
+        echo "query_execution:$pg_status"
+    fi
+    if [ $VERIFY -eq 0 ]; then
+        aws cloudwatch put-metric-data --metric-name "QueryExecution" --value "$pg_status" --unit "Count" $CLOUDWATCH_OPTS
     fi
 
     if [ $pg_status -ne 0 ]; then
