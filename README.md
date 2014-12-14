@@ -115,8 +115,9 @@ Name                       | Description
 -p                         | Specifies database server port.
 -U                         | Specifies database user.
 -d                         | Specifies database name.
---status-check             | Reports whether the database instance has passed the status check.
---status-check-timeout     | Specifies status check timeout. (default: 10s)
+--status                   | Reports the status of the database instance.
+--query-execution          | Reports whether select query is executed successfully or not.
+--query-execution-timeout  | Specifies timeout for query execution.
 --cache-hit                | Reports cache hit ratio.
 --session-active           | Reports the number of sessions whose status is active.
 --session-idle             | Reports the number of sessions whose status is idle.
